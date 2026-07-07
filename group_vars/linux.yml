@@ -1,0 +1,20 @@
+---
+# Generic Linux (Debian/Ubuntu family) setup: everyday apps for a normal user.
+# Brave is installed from its official apt repo by the linux_apps role.
+
+brave_enabled: true
+
+apt_packages:
+  - libreoffice          # office suite (MS Office is web-only on Linux)
+  - vlc                  # media player
+  - git
+  - htop
+  - timeshift            # easy system snapshots/backups
+  - gnome-software-plugin-flatpak
+  - fonts-firacode
+
+# GUI apps best delivered as flatpaks from flathub.
+flatpak_apps:
+  - com.spotify.Client
+  - us.zoom.Zoom
+  - org.onlyoffice.desktopeditors   # MS-Office-compatible editor (optional)

@@ -1,0 +1,62 @@
+---
+# Ansible-Generic-Setups — turn a blank Mac / Windows / Linux machine into a
+# clean, debloated, ready-to-use computer for anyone. One play per OS.
+# Nothing personal is baked in: no private dotfiles, SSH keys, or preferences.
+
+- name: Set up a macOS machine
+  hosts: mac
+  gather_facts: true
+  pre_tasks:
+    - name: Skip when the host is not macOS
+      ansible.builtin.meta: end_host
+      when: ansible_facts.os_family != 'Darwin'
+  roles:
+    - homebrew         # install the apps (casks/formulae/mas from group_vars/mac.yml)
+    - macos_defaults   # a few safe Finder defaults
+    - macos_dns        # Cloudflare DNS
+
+- name: Set up a Windows machine
+  hosts: windows
+  gather_facts: true
+  # Pick the profile at runtime: `standard` (a normal person) or `developer`.
+  # Bypass the prompt with -e win_profile=standard.
+  vars_prompt:
+    - name: win_profile
+      prompt: "Windows profile? [standard / developer]"
+      default: standard
+      private: false
+  pre_tasks:
+    - name: Validate the chosen profile
+      ansible.builtin.assert:
+        that: win_profile in ['standard', 'developer']
+        fail_msg: "win_profile must be 'standard' or 'developer'."
+    - name: Load the profile variables
+      ansible.builtin.include_vars: "{{ playbook_dir }}/profiles/{{ win_profile }}.yml"
+    - name: Announce the profile
+      ansible.builtin.debug:
+        msg: "Provisioning Windows with the '{{ win_profile }}' profile."
+  roles:
+    - windows_restore_point   # safety: create a System Restore point first
+    - windows_dns             # Cloudflare DNS
+    - windows_debloat         # remove bloat/OEM junk AppX packages
+    - windows_onedrive        # remove OneDrive (files in ~/OneDrive are kept)
+    - windows_services        # disable telemetry services
+    - windows_scheduled_tasks # disable telemetry/CEIP scheduled tasks
+    - windows_startup         # remove unwanted startup entries (none by default)
+    - windows_settings        # privacy/debloat registry tweaks (transparency stays ON)
+    - windows_features        # optional features (none for standard; WSL for developer)
+    - winget                  # install the apps (Brave, Office, VLC, …)
+  handlers:
+    - name: Reboot notice
+      ansible.builtin.debug:
+        msg: "Some changes (features / GPU scheduling) need a reboot to take effect."
+
+- name: Set up a Linux machine
+  hosts: linux
+  gather_facts: true
+  pre_tasks:
+    - name: Skip when the host is not Linux
+      ansible.builtin.meta: end_host
+      when: ansible_facts.system != 'Linux'
+  roles:
+    - linux_apps       # Brave + apt apps + flatpaks (group_vars/linux.yml)

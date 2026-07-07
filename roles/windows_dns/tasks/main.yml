@@ -1,0 +1,45 @@
+---
+# windows_dns role: point every physical, connected adapter at Cloudflare DNS
+# (dns_v4 + dns_v6 from group_vars/all.yml). Virtual adapters (WSL, Hyper-V
+# switches, loopback) are left alone so mirrored networking keeps working.
+# Idempotent: only reports changed when an adapter's servers actually differ.
+
+- name: Set Cloudflare DNS on physical adapters
+  ansible.windows.win_shell: |
+    $want = '{{ (dns_v4 + dns_v6) | join(",") }}'.Split(',')
+    $changed = $false
+    foreach ($a in (Get-NetAdapter -Physical | Where-Object Status -eq 'Up')) {
+      $cur = (Get-DnsClientServerAddress -InterfaceIndex $a.ifIndex |
+              Select-Object -ExpandProperty ServerAddresses)
+      $diff = Compare-Object -ReferenceObject $want -DifferenceObject @($cur)
+      if ($diff) {
+        Set-DnsClientServerAddress -InterfaceIndex $a.ifIndex -ServerAddresses $want
+        $changed = $true
+      }
+    }
+    if ($changed) { 'changed' } else { 'ok' }
+  register: win_dns
+  changed_when: "'changed' in win_dns.stdout"
+
+# Register Cloudflare's DoH templates with AutoUpgrade so Windows transparently
+# uses encrypted DNS (DNS-over-HTTPS) whenever these servers are the resolver.
+# Failure-tolerant: the cmdlet only exists on Windows 11, older builds skip.
+- name: Enable DNS-over-HTTPS for Cloudflare
+  ansible.windows.win_shell: |
+    if (-not (Get-Command Set-DnsClientDohServerAddress -ErrorAction SilentlyContinue)) { 'unsupported'; exit 0 }
+    $tmpl = 'https://cloudflare-dns.com/dns-query'
+    $changed = $false
+    foreach ($ip in '{{ (dns_v4 + dns_v6) | join(",") }}'.Split(',')) {
+      $existing = Get-DnsClientDohServerAddress -ServerAddress $ip -ErrorAction SilentlyContinue
+      if ($existing -and $existing.DohTemplate -eq $tmpl -and $existing.AutoUpgrade) { continue }
+      if ($existing) {
+        Set-DnsClientDohServerAddress -ServerAddress $ip -DohTemplate $tmpl -AllowFallbackToUdp $false -AutoUpgrade $true | Out-Null
+      } else {
+        Add-DnsClientDohServerAddress -ServerAddress $ip -DohTemplate $tmpl -AllowFallbackToUdp $false -AutoUpgrade $true | Out-Null
+      }
+      $changed = $true
+    }
+    if ($changed) { 'changed' } else { 'ok' }
+  register: win_doh
+  changed_when: "'changed' in win_doh.stdout"
+  failed_when: false

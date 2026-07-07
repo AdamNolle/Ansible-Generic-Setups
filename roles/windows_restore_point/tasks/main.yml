@@ -1,0 +1,22 @@
+---
+# windows_restore_point role: before the debloat/registry changes run, make
+# sure System Protection is on for C: and drop a restore point. This is the
+# single best safety net for aggressive tweaking — if something misbehaves you
+# can roll the system state back. Failure-tolerant: never blocks the play.
+
+- name: Enable System Protection and create a pre-provision restore point
+  ansible.windows.win_powershell:
+    script: |
+      try {
+        Enable-ComputerRestore -Drive 'C:\' -ErrorAction Stop
+        # Lift the once-per-24h throttle so re-runs can still checkpoint.
+        New-Item -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SystemRestore' -Force | Out-Null
+        Set-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SystemRestore' -Name SystemRestorePointCreationFrequency -Value 0 -Type DWord
+        Checkpoint-Computer -Description 'pre-provision' -RestorePointType MODIFY_SETTINGS -ErrorAction Stop
+        Write-Output 'created'
+      } catch {
+        Write-Output "skipped: $($_.Exception.Message)"
+      }
+  register: restore_point
+  changed_when: "'created' in (restore_point.output | default([]))"
+  failed_when: false

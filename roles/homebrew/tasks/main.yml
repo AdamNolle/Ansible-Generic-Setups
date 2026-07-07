@@ -1,0 +1,65 @@
+- name: Locate the brew executable
+  ansible.builtin.command: which brew
+  register: homebrew_which
+  changed_when: false
+  failed_when: false
+  check_mode: false
+- name: Assert Homebrew is installed
+  ansible.builtin.assert:
+    that:
+    - homebrew_which.rc == 0
+    - homebrew_which.stdout | length > 0
+    fail_msg: 'Homebrew (brew) was not found on PATH. Run the bootstrap script first: bootstrap/mac.sh'
+    success_msg: Homebrew found at {{ homebrew_which.stdout }}
+- name: Add Homebrew taps
+  community.general.homebrew_tap:
+    name: '{{ item }}'
+    state: present
+  loop: '{{ homebrew_taps }}'
+- name: Trust manifest taps (Homebrew tap-trust; taps here are user-vetted)
+  ansible.builtin.command: brew trust {{ item | quote }}
+  loop: '{{ homebrew_taps }}'
+  register: homebrew_trust
+  changed_when: homebrew_trust.rc == 0 and 'Already trusted' not in homebrew_trust.stdout
+  failed_when: homebrew_trust.rc != 0 and 'Unknown command' not in homebrew_trust.stderr
+- name: Install Homebrew formulae
+  community.general.homebrew:
+    name: '{{ homebrew_formulae }}'
+    state: present
+- name: Install Homebrew casks
+  community.general.homebrew_cask:
+    name: '{{ item }}'
+    state: present
+    accept_external_apps: true
+    sudo_password: '{{ ansible_become_password | default(omit) }}'
+  loop: '{{ homebrew_casks }}'
+- name: Check the Mac App Store is reachable
+  ansible.builtin.command: mas list
+  register: mas_list
+  changed_when: false
+  failed_when: false
+  check_mode: false
+- name: Warn when the Mac App Store is unavailable (mas installs skipped)
+  ansible.builtin.debug:
+    msg: Mac App Store is not reachable (`mas list` failed). This usually means you are not signed in. Skipping all mas installs.
+      Sign in via the App Store app, then re-run this playbook.
+  when: mas_list.rc != 0
+# `mas list` cannot detect App Store sign-in state (it reads local receipts),
+# and mas 7 removed `mas account`, so sign-in cannot be probed at all. Instead
+# the installs are non-fatal: when not signed in the first install errors, we
+# continue, and a follow-up warning tells the user to sign in and re-run.
+- name: Install Mac App Store apps
+  community.general.mas:
+    id: '{{ item.id }}'
+    state: present
+  loop: '{{ mas_apps }}'
+  loop_control:
+    label: '{{ item.name }} ({{ item.id }})'
+  when: mas_list.rc == 0
+  register: mas_install
+  ignore_errors: true
+- name: Warn when Mac App Store installs failed (likely not signed in)
+  ansible.builtin.debug:
+    msg: One or more Mac App Store installs failed — usually because you are not signed in to the App Store. mas apps were
+      skipped; sign in via the App Store app, then re-run this playbook to install them.
+  when: mas_install.results | default([]) | selectattr('failed', 'defined') | selectattr('failed') | list | length > 0

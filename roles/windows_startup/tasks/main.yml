@@ -1,0 +1,21 @@
+---
+# windows_startup role: declaratively purge unwanted auto-start entries.
+# The list is empty by default (the desktop keeps its startup set — see
+# group_vars/windows.yml); add Run-key value names there to remove them on
+# every converge. Covers both hives plus the StartupApproved shadow keys
+# Task Manager writes.
+
+- name: Remove startup entries from Run and StartupApproved keys
+  ansible.windows.win_regedit:
+    path: "{{ item[0] }}"
+    name: "{{ item[1] }}"
+    state: absent
+  vars:
+    startup_run_keys:
+      - HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run
+      - HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run
+      - HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run
+      - HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run
+  loop: "{{ startup_run_keys | product(windows_startup_disable) | list }}"
+  loop_control:
+    label: "{{ item[1] }} ({{ item[0] }})"

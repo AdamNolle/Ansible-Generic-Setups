@@ -1,0 +1,8 @@
+---
+# standard profile — a normal person's computer. The base manifest
+# (group_vars/windows.yml) already installs the everyday apps and does the full
+# debloat, so this profile adds nothing extra. It exists so you always pass a
+# profile and can drop machine-specific extras here later.
+winget_packages_extra: []
+windows_features_extra: []
+windows_registry_settings_extra: []

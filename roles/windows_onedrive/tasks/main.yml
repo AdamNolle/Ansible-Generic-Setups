@@ -1,0 +1,52 @@
+---
+# windows_onedrive role: fully remove OneDrive — the app, its services,
+# scheduled tasks, Explorer sidebar entry, autostart, and the sync policy —
+# while KEEPING your files local (the ~/OneDrive folder and its contents are
+# never deleted). Convergent: re-runs re-remove anything that came back.
+
+- name: Tear down OneDrive
+  ansible.windows.win_shell: |
+    $did = $false
+    # Stop it if running.
+    Get-Process OneDrive, FileCoAuth -ErrorAction SilentlyContinue | ForEach-Object {
+      Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue; $did = $true
+    }
+    # Run the built-in uninstaller (per-user + machine variants).
+    $setup = @(
+      "$env:SystemRoot\System32\OneDriveSetup.exe",
+      "$env:SystemRoot\SysWOW64\OneDriveSetup.exe"
+    ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+    if ($setup) { Start-Process $setup '/uninstall' -Wait -ErrorAction SilentlyContinue; $did = $true }
+    # winget fallback for the machine-wide package.
+    $wg = Get-Command winget -ErrorAction SilentlyContinue
+    if ($wg -and (winget list --id Microsoft.OneDrive -e --disable-interactivity 2>$null | Select-String 'Microsoft.OneDrive')) {
+      winget uninstall --id Microsoft.OneDrive -e --silent --disable-interactivity 2>$null | Out-Null
+      $did = $true
+    }
+    # Remove OneDrive scheduled tasks.
+    $tasks = Get-ScheduledTask -ErrorAction SilentlyContinue | Where-Object { $_.TaskName -like 'OneDrive*' }
+    if ($tasks) { $tasks | Unregister-ScheduledTask -Confirm:$false -ErrorAction SilentlyContinue; $did = $true }
+    # Remove the Run autostart entry.
+    if (Get-ItemProperty 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run' -Name OneDrive -ErrorAction SilentlyContinue) {
+      Remove-ItemProperty 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run' -Name OneDrive -ErrorAction SilentlyContinue; $did = $true
+    }
+    if ($did) { 'changed' } else { 'ok' }
+  register: onedrive_teardown
+  changed_when: "'changed' in onedrive_teardown.stdout"
+
+- name: Hide the OneDrive entry from the Explorer sidebar (both CLSIDs)
+  ansible.windows.win_regedit:
+    path: "{{ item }}"
+    name: System.IsPinnedToNameSpaceTree
+    type: dword
+    data: 0
+  loop:
+    - 'HKLM:\SOFTWARE\Classes\CLSID\{018D5C66-4533-4307-9B53-224DE2ED1FE6}'
+    - 'HKLM:\SOFTWARE\Classes\Wow6432Node\CLSID\{018D5C66-4533-4307-9B53-224DE2ED1FE6}'
+
+- name: Prevent OneDrive from being re-provisioned (policy)
+  ansible.windows.win_regedit:
+    path: 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\OneDrive'
+    name: DisableFileSyncNGSC
+    type: dword
+    data: 1

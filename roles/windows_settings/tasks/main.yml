@@ -1,0 +1,40 @@
+---
+# windows_settings role: apply the declared registry tweaks via win_regedit —
+# the Windows analog of the macos_defaults role. Because Ansible connects over
+# SSH as the real user (with a full admin token), HKCU writes land in the
+# actual user hive and HKLM writes need no `become`.
+#
+# HAGS (HwSchMode) is applied by a dedicated task because changing it only
+# takes effect after a reboot — it notifies the play's Reboot notice handler.
+
+- name: Apply registry tweaks
+  ansible.windows.win_regedit:
+    path: "{{ item.path }}"
+    name: "{{ item.name }}"
+    type: "{{ item.type }}"
+    data: "{{ item.data }}"
+    state: present
+  loop: "{{ windows_registry_settings + (windows_registry_settings_extra | default([])) }}"
+  loop_control:
+    label: "{{ item.name }} — {{ item.label }}"
+
+- name: Enable hardware-accelerated GPU scheduling (HAGS)
+  ansible.windows.win_regedit:
+    path: "{{ windows_registry_hags.path }}"
+    name: "{{ windows_registry_hags.name }}"
+    type: "{{ windows_registry_hags.type }}"
+    data: "{{ windows_registry_hags.data }}"
+    state: present
+  notify: Reboot notice
+
+# Restore the Windows 10 right-click menu (removes the "Show more options"
+# extra click). Toggle with windows_classic_context_menu. Setting the
+# (Default) value of this CLSID's InprocServer32 to empty is the documented
+# mechanism; Explorer must restart to pick it up.
+- name: Restore classic context menu
+  ansible.windows.win_regedit:
+    path: 'HKCU:\Software\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\InprocServer32'
+    data: ""
+    type: string
+  when: windows_classic_context_menu | default(false)
+

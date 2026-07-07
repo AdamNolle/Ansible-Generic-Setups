@@ -1,0 +1,33 @@
+---
+# windows_debloat role: remove the declared AppX packages for all users AND
+# de-provision them (so they don't return for new users or after feature
+# updates). OneDrive is handled separately by the windows_onedrive role.
+#
+# Convergent by design: Store updates occasionally resurrect packages (e.g.
+# Widgets/WebExperience) — every run re-removes anything that came back.
+# CBS-delivered system packages (CoreAI/AIFabric/AugLoop on 24H2+) refuse
+# Remove-AppxPackage; those report "blocked" and never fail the play.
+
+- name: Remove declared AppX packages (installed + provisioned)
+  ansible.windows.win_shell: |
+    $name = '{{ item }}'
+    $pkgs = Get-AppxPackage -AllUsers -Name $name
+    $prov = Get-AppxProvisionedPackage -Online | Where-Object { $_.DisplayName -like $name }
+    if (-not $pkgs -and -not $prov) { 'absent'; exit 0 }
+    $pkgs | Remove-AppxPackage -AllUsers -ErrorAction SilentlyContinue
+    $prov | Remove-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue | Out-Null
+    if (Get-AppxPackage -AllUsers -Name $name) { 'blocked' } else { 'removed' }
+  loop: "{{ appx_remove + appx_remove_optional + appx_remove_oem }}"
+  register: appx_removal
+  changed_when: "'removed' in appx_removal.stdout"
+  failed_when: false
+
+- name: Report packages Windows refused to remove (CBS/system packages)
+  ansible.builtin.debug:
+    msg: "{{ item.item }} is a protected system package — left in place (best-effort)."
+  loop: "{{ appx_removal.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  when: "'blocked' in (item.stdout | default(''))"
+
+# OneDrive is torn down comprehensively by the windows_onedrive role.

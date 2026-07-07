@@ -1,0 +1,79 @@
+---
+# winget role: install the declared packages (base list + profile extras).
+# The installed set is read via `winget export` JSON — never `winget list`,
+# whose column output truncates package IDs. A failed individual install
+# (e.g. the app is currently running) is reported but doesn't kill the run;
+# re-run after closing the app.
+
+- name: Locate winget
+  ansible.windows.win_shell: |
+    $w = Get-Command winget -ErrorAction SilentlyContinue
+    if ($w) { $w.Source; exit 0 }
+    $loc = (Get-AppxPackage Microsoft.DesktopAppInstaller -ErrorAction SilentlyContinue).InstallLocation
+    if ($loc -and (Test-Path "$loc\winget.exe")) { "$loc\winget.exe"; exit 0 }
+    exit 1
+  register: winget_locate
+  changed_when: false
+  check_mode: false
+
+- name: Assert winget is available
+  ansible.builtin.assert:
+    that: winget_locate.rc == 0
+    fail_msg: winget was not found (App Installer missing?). Install "App Installer" from the Microsoft Store and re-run.
+
+- name: Record winget executable path
+  ansible.builtin.set_fact:
+    winget_exe: "{{ winget_locate.stdout_lines[0] }}"
+
+- name: Export the currently installed winget package set
+  ansible.windows.win_shell: |
+    $out = Join-Path $env:TEMP 'winget-export.json'
+    & '{{ winget_exe }}' export -o $out -s winget --disable-interactivity | Out-Null
+    Get-Content $out -Raw
+  register: winget_export
+  changed_when: false
+  check_mode: false
+
+- name: Derive the installed package ID list
+  ansible.builtin.set_fact:
+    winget_installed_ids: >-
+      {{ (winget_export.stdout | from_json).Sources | default([])
+         | map(attribute='Packages') | flatten
+         | map(attribute='PackageIdentifier') | list }}
+
+- name: Install missing winget packages
+  ansible.windows.win_shell: >-
+    & '{{ winget_exe }}' install --id {{ item.id }} -e -s winget
+    --silent --accept-source-agreements --accept-package-agreements
+    --disable-interactivity
+  loop: "{{ winget_packages + (winget_packages_extra | default([])) }}"
+  loop_control:
+    label: "{{ item.name }} ({{ item.id }})"
+  when: item.id not in winget_installed_ids
+  register: winget_installs
+  changed_when: winget_installs.rc == 0
+  failed_when: false
+
+- name: Report any failed installs
+  ansible.builtin.debug:
+    msg: >-
+      winget failed to install {{ item.item.name }} ({{ item.item.id }}),
+      rc={{ item.rc }}. If the app was running, close it and re-run.
+  loop: "{{ winget_installs.results | default([]) }}"
+  loop_control:
+    label: "{{ item.item.name | default('n/a') }}"
+  when:
+    - item is not skipped
+    - item.rc | default(0) != 0
+
+- name: Uninstall unwanted winget packages
+  ansible.windows.win_shell: >-
+    & '{{ winget_exe }}' uninstall --id {{ item }} -e
+    --silent --disable-interactivity
+  loop: "{{ winget_remove | default([]) }}"
+  loop_control:
+    label: "{{ item }}"
+  when: item in winget_installed_ids
+  register: winget_uninstalls
+  changed_when: winget_uninstalls.rc == 0
+  failed_when: false

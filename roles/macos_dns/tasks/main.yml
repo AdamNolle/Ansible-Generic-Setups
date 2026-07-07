@@ -1,0 +1,30 @@
+---
+# macos_dns role: point every enabled network service at Cloudflare DNS
+# (dns_v4 + dns_v6 from group_vars/all.yml). networksetup needs admin, so the
+# set task uses become (the mac play runs with -K). Idempotent: compares the
+# current servers before writing.
+
+- name: List active network services
+  ansible.builtin.shell: >-
+    networksetup -listallnetworkservices | tail -n +2 | grep -v '^\*' || true
+  register: mac_net_services
+  changed_when: false
+
+- name: Read current DNS servers per service
+  ansible.builtin.command: networksetup -getdnsservers "{{ item }}"
+  loop: "{{ mac_net_services.stdout_lines }}"
+  loop_control:
+    label: "{{ item }}"
+  register: mac_dns_current
+  changed_when: false
+
+- name: Set Cloudflare DNS on services that differ
+  ansible.builtin.command: >-
+    networksetup -setdnsservers "{{ item.item }}" {{ (dns_v4 + dns_v6) | join(' ') }}
+  loop: "{{ mac_dns_current.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  become: true
+  when: >-
+    (item.stdout_lines | map('trim') | list) != (dns_v4 + dns_v6)
+  changed_when: true

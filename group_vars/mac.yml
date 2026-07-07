@@ -1,0 +1,48 @@
+---
+# Generic macOS setup: the apps a normal person wants + a few safe, universally
+# helpful Finder defaults. No personal dotfiles or preferences imposed.
+
+homebrew_taps: []
+
+# CLI formulae — kept minimal for a normal user. Add dev tools per machine.
+homebrew_formulae:
+  - fastfetch
+
+# GUI apps (casks). Microsoft Office installs Word/Excel/PowerPoint/Outlook/
+# OneNote/Teams — the user signs in with their own Microsoft account/license.
+homebrew_casks:
+  - brave-browser
+  - google-chrome
+  - microsoft-office
+  - vlc
+  - spotify
+  - zoom
+  - the-unarchiver
+
+# Mac App Store apps (requires being signed into the App Store). Empty by
+# default so setup never blocks on an Apple ID.
+mas_apps: []
+
+# A few broadly-helpful, non-intrusive Finder/system defaults. Nothing here
+# changes the "feel" (no trackpad/keyboard/Dock behavior changes).
+macos_defaults_settings:
+  - domain: NSGlobalDomain
+    key: AppleShowAllExtensions
+    type: bool
+    value: true
+    label: Show all file extensions
+  - domain: com.apple.finder
+    key: ShowPathbar
+    type: bool
+    value: true
+    label: Show the Finder path bar
+  - domain: com.apple.finder
+    key: FXEnableExtensionChangeWarning
+    type: bool
+    value: false
+    label: No nag when changing a file extension
+  - domain: com.apple.desktopservices
+    key: DSDontWriteNetworkStores
+    type: bool
+    value: true
+    label: Do not litter .DS_Store on network shares

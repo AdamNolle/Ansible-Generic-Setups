@@ -1,0 +1,76 @@
+---
+# macos_defaults role: apply the declared macOS `defaults` via
+# community.general.osx_defaults.
+#
+# The settings are grouped by owning UI service so that a change to a domain
+# only restarts the service that renders it (Dock / Finder / ControlCenter,
+# which renders the menu-bar clock since macOS 11). Every group loops
+# osx_defaults over a filtered slice of the
+# single `macos_defaults_settings` list, so the variable contract stays intact.
+#
+# These are per-user preferences, so no `become` is used. Values keep their
+# native YAML types from the variable file (bool/int/array); passing
+# `value: "{{ item.value }}"` as a lone expression preserves the real type, and
+# `type: "{{ item.type }}"` tells osx_defaults how to write it — so an
+# `array`-typed setting is handed a real list and written correctly.
+
+- name: Apply Dock defaults
+  community.general.osx_defaults:
+    domain: "{{ item.domain }}"
+    key: "{{ item.key }}"
+    type: "{{ item.type }}"
+    value: "{{ item.value }}"
+    state: present
+  loop: >-
+    {{ macos_defaults_settings
+       | selectattr('domain', 'equalto', 'com.apple.dock') | list }}
+  loop_control:
+    label: "{{ item.key }} — {{ item.label }}"
+  notify: Restart Dock
+
+- name: Apply Finder defaults
+  community.general.osx_defaults:
+    domain: "{{ item.domain }}"
+    key: "{{ item.key }}"
+    type: "{{ item.type }}"
+    value: "{{ item.value }}"
+    state: present
+  loop: >-
+    {{ macos_defaults_settings
+       | selectattr('domain', 'equalto', 'com.apple.finder') | list }}
+  loop_control:
+    label: "{{ item.key }} — {{ item.label }}"
+  notify: Restart Finder
+
+- name: Apply menu-bar clock defaults
+  community.general.osx_defaults:
+    domain: "{{ item.domain }}"
+    key: "{{ item.key }}"
+    type: "{{ item.type }}"
+    value: "{{ item.value }}"
+    state: present
+  loop: >-
+    {{ macos_defaults_settings
+       | selectattr('domain', 'equalto', 'com.apple.menuextra.clock') | list }}
+  loop_control:
+    label: "{{ item.key }} — {{ item.label }}"
+  notify: Restart ControlCenter
+
+- name: Apply global keyboard and trackpad defaults
+  community.general.osx_defaults:
+    domain: "{{ item.domain }}"
+    key: "{{ item.key }}"
+    type: "{{ item.type }}"
+    value: "{{ item.value }}"
+    state: present
+  # Everything not owned by a restartable UI service (NSGlobalDomain keyboard
+  # settings and the trackpad domains). These take effect on next login / app
+  # focus, so no handler is notified.
+  loop: >-
+    {{ macos_defaults_settings
+       | rejectattr('domain', 'equalto', 'com.apple.dock')
+       | rejectattr('domain', 'equalto', 'com.apple.finder')
+       | rejectattr('domain', 'equalto', 'com.apple.menuextra.clock')
+       | list }}
+  loop_control:
+    label: "{{ item.key }} — {{ item.label }}"

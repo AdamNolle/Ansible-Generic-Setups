@@ -1,0 +1,14 @@
+---
+# developer profile — everything in the standard profile PLUS a dev toolchain
+# and WSL, for someone who codes on the machine.
+winget_packages_extra: "{{ winget_bundle_dev }}"
+
+# WSL2 needs the Virtual Machine Platform feature (reboot-gated).
+windows_features_extra:
+  - VirtualMachinePlatform
+  - Microsoft-Windows-Subsystem-Linux
+
+# Developer-friendly registry extras (safe; only relevant to devs).
+windows_registry_settings_extra:
+  - { path: 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock', name: AllowDevelopmentWithoutDevLicense, type: dword, data: 1, label: Developer Mode on }
+  - { path: 'HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem', name: LongPathsEnabled, type: dword, data: 1, label: Win32 long paths enabled }

@@ -1,0 +1,11 @@
+---
+# windows_features role: enable the declared Windows optional features
+# (VirtualMachinePlatform in the base; Hyper-V and Windows Sandbox per
+# profile). Feature changes need a reboot → Reboot notice handler.
+
+- name: Enable Windows optional features
+  ansible.windows.win_optional_feature:
+    name: "{{ item }}"
+    state: present
+  loop: "{{ windows_features + (windows_features_extra | default([])) }}"
+  notify: Reboot notice

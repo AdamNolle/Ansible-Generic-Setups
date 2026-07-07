@@ -1,0 +1,87 @@
+---
+# linux_apps role: install a normal person's apps on a Debian/Ubuntu-family
+# desktop — Brave (official apt repo), an apt package list, and flatpaks from
+# flathub. Microsoft Office has no native Linux client, so LibreOffice is the
+# office suite here (Microsoft 365 is available in the browser).
+
+- name: Install prerequisites (apt keyring + flatpak)
+  ansible.builtin.apt:
+    name:
+      - curl
+      - ca-certificates
+      - apt-transport-https
+      - flatpak
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  become: true
+
+# --- Brave browser via the official apt repo ---
+- name: Set up Brave
+  when: brave_enabled | default(true)
+  block:
+    - name: Add the Brave apt signing key
+      ansible.builtin.get_url:
+        url: https://brave-browser-apt-release.s3.brave.com/brave-browser-archive-keyring.gpg
+        dest: /etc/apt/keyrings/brave-browser-archive-keyring.gpg
+        mode: "0644"
+      become: true
+
+    - name: Add the Brave apt repository
+      ansible.builtin.apt_repository:
+        repo: >-
+          deb [signed-by=/etc/apt/keyrings/brave-browser-archive-keyring.gpg]
+          https://brave-browser-apt-release.s3.brave.com/ stable main
+        filename: brave-browser-release
+        state: present
+      become: true
+
+    - name: Install Brave
+      ansible.builtin.apt:
+        name: brave-browser
+        state: present
+        update_cache: true
+      become: true
+
+# --- the rest of the apt app list ---
+- name: Install apt packages
+  ansible.builtin.apt:
+    name: "{{ apt_packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  become: true
+  when: apt_packages | default([]) | length > 0
+
+- name: Install fastfetch (latest GitHub release .deb; absent from the 24.04 archive)
+  ansible.builtin.shell: |
+    set -o pipefail
+    url=$(curl -fsSL https://api.github.com/repos/fastfetch-cli/fastfetch/releases/latest \
+          | grep -Po '"browser_download_url": *"\K[^"]*linux-amd64.deb')
+    tmp=$(mktemp --suffix=.deb)
+    curl -fsSL "$url" -o "$tmp"
+    apt-get install -y "$tmp"
+    rm -f "$tmp"
+  args:
+    creates: /usr/bin/fastfetch
+  become: true
+
+# --- flatpak apps from flathub ---
+- name: Ensure the flathub remote is configured (system-wide)
+  community.general.flatpak_remote:
+    name: flathub
+    flatpakrepo_url: https://flathub.org/repo/flathub.flatpakrepo
+    method: system
+    state: present
+  become: true
+
+- name: Install flatpak apps from flathub
+  community.general.flatpak:
+    name: "{{ item }}"
+    remote: flathub
+    method: system
+    state: present
+  loop: "{{ flatpak_apps | default([]) }}"
+  loop_control:
+    label: "{{ item }}"
+  become: true

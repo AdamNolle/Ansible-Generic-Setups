@@ -1,0 +1,17 @@
+---
+# windows_services role: pin the declared services to their start mode/state.
+# Services that don't exist on this build (e.g. dmwappushservice was dropped
+# from newer Windows 11 builds) are tolerated.
+
+- name: Configure Windows services
+  ansible.windows.win_service:
+    name: "{{ item.name }}"
+    start_mode: "{{ item.start_mode }}"
+    state: "{{ item.state }}"
+  loop: "{{ windows_services + (windows_services_extra | default([])) }}"
+  loop_control:
+    label: "{{ item.name }} — {{ item.label }}"
+  register: service_result
+  failed_when:
+    - service_result is failed
+    - (service_result.msg | default('')) is not search('not found|does not exist|NoServiceFoundForGivenName')

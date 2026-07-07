@@ -1,0 +1,191 @@
+---
+# Generic Windows setup: aggressive debloat + privacy hardening + a clean set of
+# apps everyone wants. Profile deltas live in profiles/<profile>.yml (loaded at
+# runtime) and extend these lists via the *_extra convention.
+#
+# This is tuned for setting up OTHER people's machines fast: it removes bloat,
+# telemetry, ads, and OEM junk, but does NOT impose personal preferences (theme,
+# taskbar layout, mouse feel) and — importantly — KEEPS transparency and
+# animation effects ON.
+
+# ── winget packages (installed on every profile) ──────────────────────────
+# The apps a normal person actually wants. `id` is the exact winget ID.
+winget_packages:
+  - { id: Brave.Brave,                    name: Brave (browser) }
+  - { id: Google.Chrome,                  name: Google Chrome }
+  - { id: Microsoft.Office,               name: Microsoft 365 / Office (sign in with the user's account) }
+  - { id: Adobe.Acrobat.Reader.64-bit,    name: Adobe Acrobat Reader }
+  - { id: VideoLAN.VLC,                   name: VLC media player }
+  - { id: Spotify.Spotify,                name: Spotify }
+  - { id: Zoom.Zoom,                      name: Zoom }
+  - { id: 7zip.7zip,                      name: 7-Zip }
+  - { id: Microsoft.PowerToys,            name: PowerToys }
+  - { id: Fastfetch-cli.Fastfetch,        name: fastfetch (system info) }
+
+# Named bundle the developer profile composes into winget_packages_extra.
+winget_bundle_dev:
+  - { id: Microsoft.PowerShell,           name: PowerShell 7 }
+  - { id: Microsoft.WindowsTerminal,      name: Windows Terminal }
+  - { id: Git.Git,                        name: Git }
+  - { id: GitHub.cli,                     name: GitHub CLI }
+  - { id: Microsoft.VisualStudioCode,     name: VS Code }
+  - { id: Neovim.Neovim,                  name: Neovim }
+  - { id: OpenJS.NodeJS.LTS,              name: Node.js LTS }
+  - { id: Python.Python.3.13,             name: Python 3.13 }
+
+# Packages to UNINSTALL if present (handled by the winget role). Empty by
+# default — add IDs of anything you want stripped, e.g. a preinstalled trial.
+winget_remove: []
+
+# ── Registry tweaks (privacy / debloat only) ──────────────────────────────
+# The Windows analog of macos_defaults; applied via win_regedit. Curated to
+# privacy + de-bloat, no personal-preference or feel-changing keys.
+windows_registry_settings:
+  # -- telemetry / privacy --
+  - { path: 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\DataCollection', name: AllowTelemetry, type: dword, data: 0, label: Diagnostic data - Security (off) }
+  - { path: 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection', name: AllowTelemetry, type: dword, data: 0, label: Diagnostic data policy }
+  - { path: 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\AdvertisingInfo', name: Enabled, type: dword, data: 0, label: Advertising ID off }
+  - { path: 'HKCU:\SOFTWARE\Policies\Microsoft\Windows\CloudContent', name: DisableTailoredExperiencesWithDiagnosticData, type: dword, data: 1, label: Tailored experiences off }
+  # -- AI / Copilot / Recall off --
+  - { path: 'HKCU:\SOFTWARE\Policies\Microsoft\Windows\WindowsCopilot', name: TurnOffWindowsCopilot, type: dword, data: 1, label: Copilot off (user) }
+  - { path: 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsCopilot', name: TurnOffWindowsCopilot, type: dword, data: 1, label: Copilot off (machine) }
+  - { path: 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced', name: ShowCopilotButton, type: dword, data: 0, label: Copilot taskbar button off }
+  - { path: 'HKCU:\SOFTWARE\Policies\Microsoft\Windows\WindowsAI', name: DisableAIDataAnalysis, type: dword, data: 1, label: Recall / AI data analysis off (user) }
+  - { path: 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsAI', name: DisableAIDataAnalysis, type: dword, data: 1, label: Recall / AI data analysis off (machine) }
+  - { path: 'HKLM:\SOFTWARE\Policies\Microsoft\Edge', name: HubsSidebarEnabled, type: dword, data: 0, label: Edge Copilot sidebar off }
+  # -- content / ads suppression --
+  - { path: 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent', name: DisableWindowsConsumerFeatures, type: dword, data: 1, label: No auto-installed promoted apps }
+  - { path: 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager', name: SilentInstalledAppsEnabled, type: dword, data: 0, label: No silent sponsored installs }
+  - { path: 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager', name: SystemPaneSuggestionsEnabled, type: dword, data: 0, label: No Settings suggestions }
+  - { path: 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager', name: SoftLandingEnabled, type: dword, data: 0, label: No Windows tips }
+  - { path: 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager', name: RotatingLockScreenOverlayEnabled, type: dword, data: 0, label: No lock-screen ads }
+  - { path: 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager', name: SubscribedContent-310093Enabled, type: dword, data: 0, label: No suggestions (310093) }
+  - { path: 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager', name: SubscribedContent-338388Enabled, type: dword, data: 0, label: No Start app suggestions }
+  - { path: 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager', name: SubscribedContent-338389Enabled, type: dword, data: 0, label: No tips notifications }
+  - { path: 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager', name: SubscribedContent-353694Enabled, type: dword, data: 0, label: No Settings suggestions (353694) }
+  - { path: 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\ContentDeliveryManager', name: SubscribedContent-353696Enabled, type: dword, data: 0, label: No Settings suggestions (353696) }
+  - { path: 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\UserProfileEngagement', name: ScoobeSystemSettingEnabled, type: dword, data: 0, label: No "finish setting up" nag }
+  # -- keep the visual polish (transparency + animations ON) --
+  - { path: 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize', name: EnableTransparency, type: dword, data: 1, label: Transparency effects ON }
+  # -- de-bloat the taskbar/Start (widgets, chat, web-search ads — not layout) --
+  - { path: 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced', name: TaskbarDa, type: dword, data: 0, label: Widgets button hidden }
+  - { path: 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced', name: TaskbarMn, type: dword, data: 0, label: Chat/Teams button hidden }
+  - { path: 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced', name: ShowSyncProviderNotifications, type: dword, data: 0, label: No OneDrive/sync ads in Explorer }
+  - { path: 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced', name: Start_IrisRecommendations, type: dword, data: 0, label: No Start recommendations/ads }
+  - { path: 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Advanced', name: TaskbarEndTask, type: dword, data: 1, label: End Task in taskbar right-click }
+  - { path: 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\Explorer', name: HideRecommendedSection, type: dword, data: 1, label: Hide Start "Recommended" section }
+  - { path: 'HKLM:\SOFTWARE\Policies\Microsoft\Dsh', name: AllowNewsAndInterests, type: dword, data: 0, label: Widgets/News feed disabled (policy) }
+  - { path: 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Search', name: BingSearchEnabled, type: dword, data: 0, label: No Bing web results in Start search }
+  - { path: 'HKCU:\SOFTWARE\Policies\Microsoft\Windows\Explorer', name: DisableSearchBoxSuggestions, type: dword, data: 1, label: No Start search web suggestions }
+  # -- gaming capture off (background recorder) --
+  - { path: 'HKCU:\System\GameConfigStore', name: GameDVR_Enabled, type: dword, data: 0, label: Game DVR off }
+  - { path: 'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\GameDVR', name: AppCaptureEnabled, type: dword, data: 0, label: Background game capture off }
+
+# Hardware-accelerated GPU scheduling — reboot-gated (windows_settings notifies
+# the Reboot notice handler). Modern default on Windows 11; kept on.
+windows_registry_hags:
+  path: 'HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers'
+  name: HwSchMode
+  type: dword
+  data: 2
+  label: Hardware-accelerated GPU scheduling on
+
+# Restore the classic (Windows 10) right-click context menu. Off by default.
+windows_classic_context_menu: false
+
+# ── Services to disable (privacy only) ────────────────────────────────────
+# NOTE: SysMain (Superfetch) is deliberately LEFT ENABLED — it helps on machines
+# with an HDD, which a client's PC may well have.
+windows_services:
+  - { name: DiagTrack,        start_mode: disabled, state: stopped, label: Connected User Experiences (telemetry) }
+  - { name: dmwappushservice, start_mode: disabled, state: stopped, label: WAP push routing (telemetry) }
+  - { name: RemoteRegistry,   start_mode: disabled, state: stopped, label: Remote registry access }
+
+# ── Scheduled tasks to disable (telemetry / CEIP set) ─────────────────────
+windows_scheduled_tasks_disable:
+  - { path: '\Microsoft\Windows\Application Experience\', name: Microsoft Compatibility Appraiser }
+  - { path: '\Microsoft\Windows\Application Experience\', name: ProgramDataUpdater }
+  - { path: '\Microsoft\Windows\Application Experience\', name: MareBackup }
+  - { path: '\Microsoft\Windows\Application Experience\', name: PcaPatchDbTask }
+  - { path: '\Microsoft\Windows\Application Experience\', name: StartupAppTask }
+  - { path: '\Microsoft\Windows\Customer Experience Improvement Program\', name: Consolidator }
+  - { path: '\Microsoft\Windows\Customer Experience Improvement Program\', name: UsbCeip }
+  - { path: '\Microsoft\Windows\Autochk\', name: Proxy }
+  - { path: '\Microsoft\Windows\DiskDiagnostic\', name: Microsoft-Windows-DiskDiagnosticDataCollector }
+  - { path: '\Microsoft\Windows\Feedback\Siuf\', name: DmClient }
+  - { path: '\Microsoft\Windows\Feedback\Siuf\', name: DmClientOnScenario }
+  - { path: '\Microsoft\Windows\Windows Error Reporting\', name: QueueReporting }
+  - { path: '\Microsoft\Windows\Maps\', name: MapsToastTask }
+  - { path: '\Microsoft\Windows\Maps\', name: MapsUpdateTask }
+  - { path: '\Microsoft\Windows\Retail Demo\', name: CleanupOfflineContent }
+  - { path: '\Microsoft\Windows\Clip\', name: License Validation }
+
+# ── AppX debloat ──────────────────────────────────────────────────────────
+# Names support wildcards. Removal also de-provisions so apps don't return for
+# new users / after feature updates. KEPT on purpose: the Xbox stack, Photos,
+# StickyNotes, Alarms, SoundRecorder, QuickAssist, GetHelp, Calculator, Terminal.
+appx_remove:
+  - Microsoft.MicrosoftSolitaireCollection
+  - Clipchamp.Clipchamp
+  - MSTeams
+  - Microsoft.BingNews
+  - Microsoft.BingWeather
+  - Microsoft.BingSearch
+  - Microsoft.Todos
+  - Microsoft.WindowsFeedbackHub
+  - microsoft.windowscommunicationsapps   # Mail / Calendar
+  - Microsoft.WindowsMaps
+  - Microsoft.People
+  - Microsoft.549981C3F5F10               # Cortana
+  - Microsoft.GetStarted
+  - Microsoft.MicrosoftOfficeHub
+  - Microsoft.SkypeApp
+  - Microsoft.Wallet
+  - Microsoft.MixedReality.Portal
+  - Microsoft.Microsoft3DViewer
+  - Microsoft.Print3D
+  - Microsoft.OneConnect
+  - Microsoft.OutlookForWindows
+  - Microsoft.YourPhone                    # Phone Link
+  - Microsoft.PowerAutomateDesktop
+  - Microsoft.ZuneMusic                    # "Media Player"
+  - MicrosoftWindows.Client.WebExperience  # Widgets
+  - Microsoft.OneDriveSync
+  # -- all AI / Copilot surfaces --
+  - Microsoft.Copilot
+  - Microsoft.Windows.Ai.Copilot.Provider
+  - "*Copilot*"
+  - MicrosoftWindows.Client.CoreAI         # CBS system pkg (best-effort)
+  - "Microsoft.AIFabric*"                  # CBS system pkg (best-effort)
+  - "Microsoft.Windows.AugLoop*"           # CBS system pkg (best-effort)
+
+# Optional extra removals (empty by default — these are apps many people keep).
+appx_remove_optional: []
+#  - Microsoft.Windows.Photos
+#  - Microsoft.MicrosoftStickyNotes
+#  - Microsoft.GamingApp                   # Xbox app
+#  - Microsoft.XboxGamingOverlay
+
+# OEM junk (McAfee/Norton trials, HP/Dell/Lenovo/Acer/ASUS/MSI bloat). Harmless
+# no-op on a clean/self-built machine; a big win on a store-bought laptop.
+appx_remove_oem:
+  - AD2F1837.*                # HP
+  - DellInc.*                 # Dell
+  - "*SupportAssist*"
+  - E046963F.*                # Lenovo Companion
+  - LenovoCorporation.*
+  - AcerIncorporated.*
+  - B9ECED6F.*                # ASUS
+  - ASUSTeKCOMPUTERINC.*
+  - 9426MICRO-STARINTERNATION.*  # MSI Center
+  - "*McAfee*"
+  - "*Norton*"
+
+# ── Startup items to REMOVE (Run-key value names). Empty by default. ──────
+windows_startup_disable: []
+
+# ── Windows optional features (base: none; developer profile adds WSL) ────
+windows_features: []
+
+# Hibernation / Fast Startup left at the machine's own default.
+windows_disable_hibernation: false

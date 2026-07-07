@@ -1,0 +1,18 @@
+---
+# windows_scheduled_tasks role: disable the declared scheduled tasks (the
+# telemetry/CEIP set). Uses Disable-ScheduledTask directly — the
+# community.windows win_scheduled_task module wants a full task definition
+# for state=present, which is the wrong shape for "leave it, just disable it".
+# Tasks absent on this build report "absent" and are skipped.
+
+- name: Disable telemetry scheduled tasks
+  ansible.windows.win_shell: |
+    $t = Get-ScheduledTask -TaskPath '{{ item.path }}' -TaskName '{{ item.name }}' -ErrorAction SilentlyContinue
+    if (-not $t) { 'absent' }
+    elseif ($t.State -eq 'Disabled') { 'ok' }
+    else { $t | Disable-ScheduledTask | Out-Null; 'disabled' }
+  loop: "{{ windows_scheduled_tasks_disable }}"
+  loop_control:
+    label: "{{ item.path }}{{ item.name }}"
+  register: schtask_result
+  changed_when: "'disabled' in schtask_result.stdout"
