@@ -28,6 +28,16 @@ ansible-playbook site.yml --limit linux -K                  # on a Linux box
 ansible-playbook site.yml --limit windows -K -e win_profile=standard   # from a control node
 ```
 
+### Linux server / homelab
+
+The repository also includes a conservative `linux_server` profile for a
+Docker-based media and AI server. It manages existing UUID-mounted drives,
+Docker/Compose, boot recovery, updates, health checks, optional NVIDIA
+containers, opt-in firewalling, and secret-safe Compose deployment. It will
+never format a drive or deploy a stack by default. Read the full
+[Linux server guide](docs/linux-server.md) before adding a target to the
+`linux_server` inventory group.
+
 ---
 
 ## 🪟 Windows — the big one

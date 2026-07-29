@@ -1,0 +1,52 @@
+---
+- name: Set the server timezone
+  community.general.timezone:
+    name: "{{ linux_server_timezone }}"
+  become: true
+
+- name: Install server baseline packages
+  ansible.builtin.apt:
+    name:
+      - acl
+      - ca-certificates
+      - curl
+      - git
+      - gnupg
+      - jq
+      - logrotate
+      - needrestart
+      - smartmontools
+      - unattended-upgrades
+      - update-notifier-common
+      - vim
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  become: true
+
+- name: Enable periodic security updates
+  ansible.builtin.copy:
+    dest: /etc/apt/apt.conf.d/20auto-upgrades
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+  become: true
+
+- name: Enable periodic filesystem trimming
+  ansible.builtin.systemd_service:
+    name: fstrim.timer
+    enabled: true
+    state: started
+  become: true
+
+- name: Create the server data root
+  ansible.builtin.file:
+    path: "{{ linux_server_data_root }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  become: true

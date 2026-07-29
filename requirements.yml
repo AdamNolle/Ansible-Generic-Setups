@@ -1,5 +1,7 @@
 ---
 collections:
   - name: community.general
+  - name: community.docker
+  - name: ansible.posix
   - name: ansible.windows      # win_regedit, win_service, win_optional_feature, win_shell, win_copy, win_stat
   - name: community.windows    # win_firewall_rule, win_lineinfile

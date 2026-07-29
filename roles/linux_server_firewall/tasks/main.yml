@@ -1,0 +1,39 @@
+---
+- name: Configure opt-in UFW firewall
+  when: linux_server_firewall_enabled | bool
+  block:
+    - name: Install UFW
+      ansible.builtin.apt:
+        name: ufw
+        state: present
+        update_cache: true
+      become: true
+
+    - name: Keep SSH reachable before enforcing firewall defaults
+      community.general.ufw:
+        rule: allow
+        port: "{{ linux_server_ssh_port }}"
+        proto: tcp
+      become: true
+
+    - name: Allow explicitly requested TCP ports
+      community.general.ufw:
+        rule: allow
+        port: "{{ item }}"
+        proto: tcp
+      loop: "{{ linux_server_allowed_tcp_ports }}"
+      become: true
+
+    - name: Set safe UFW defaults
+      community.general.ufw:
+        direction: "{{ item.direction }}"
+        default: "{{ item.policy }}"
+      loop:
+        - { direction: incoming, policy: deny }
+        - { direction: outgoing, policy: allow }
+      become: true
+
+    - name: Enable UFW
+      community.general.ufw:
+        state: enabled
+      become: true

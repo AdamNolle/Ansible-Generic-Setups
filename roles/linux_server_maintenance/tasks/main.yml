@@ -1,0 +1,100 @@
+---
+- name: Create homeserver health check script
+  ansible.builtin.template:
+    src: homeserver-healthcheck.sh.j2
+    dest: /usr/local/sbin/homeserver-healthcheck
+    owner: root
+    group: root
+    mode: "0755"
+  become: true
+
+- name: Create homeserver health check service
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/homeserver-healthcheck.service
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      [Unit]
+      Description=Home server mount and Docker health check
+      After=docker.service local-fs.target
+      Wants=docker.service
+
+      [Service]
+      Type=oneshot
+      ExecStart=/usr/local/sbin/homeserver-healthcheck
+  notify: Reload systemd
+  become: true
+
+- name: Create homeserver health check timer
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/homeserver-healthcheck.timer
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      [Unit]
+      Description=Run the home server health check {{ linux_server_healthcheck_interval }}
+
+      [Timer]
+      OnBootSec=5min
+      OnUnitActiveSec={{ linux_server_healthcheck_interval }}
+      Persistent=true
+
+      [Install]
+      WantedBy=timers.target
+  notify: Reload systemd
+  become: true
+
+- name: Enable homeserver health check timer
+  ansible.builtin.systemd_service:
+    name: homeserver-healthcheck.timer
+    enabled: true
+    state: started
+    daemon_reload: true
+  become: true
+
+- name: Create optional Docker image prune service
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/homeserver-docker-prune.service
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      [Unit]
+      Description=Prune unused Docker images without touching volumes
+      After=docker.service
+      Wants=docker.service
+
+      [Service]
+      Type=oneshot
+      ExecStart=/usr/bin/docker image prune --all --force --filter until={{ linux_server_docker_prune_age }}
+  notify: Reload systemd
+  become: true
+
+- name: Create optional Docker image prune timer
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/homeserver-docker-prune.timer
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      [Unit]
+      Description=Run the optional weekly Docker image prune
+
+      [Timer]
+      OnCalendar=weekly
+      Persistent=true
+
+      [Install]
+      WantedBy=timers.target
+  notify: Reload systemd
+  become: true
+
+- name: Enable or disable optional Docker image prune timer
+  ansible.builtin.systemd_service:
+    name: homeserver-docker-prune.timer
+    enabled: "{{ linux_server_enable_docker_prune | bool }}"
+    state: "{{ 'started' if linux_server_enable_docker_prune | bool else 'stopped' }}"
+    daemon_reload: true
+  become: true
