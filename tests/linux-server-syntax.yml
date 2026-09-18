@@ -1,0 +1,23 @@
+---
+# This playbook is intentionally limited to the server profile. It is used for
+# offline syntax checks without parsing unrelated macOS/Windows roles.
+- name: Parse the Linux server profile
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    linux_server_storage_mounts: []
+    linux_server_compose_projects: []
+    linux_server_memory_tuning_enabled: false
+    linux_server_gpu_enabled: false
+    linux_server_firewall_enabled: false
+    linux_server_enable_docker_prune: false
+  roles:
+    - linux_server_base
+    - linux_server_memory
+    - linux_server_storage
+    - linux_server_docker
+    - linux_server_gpu
+    - linux_server_firewall
+    - linux_server_compose
+    - linux_server_maintenance

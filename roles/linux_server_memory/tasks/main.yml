@@ -1,0 +1,13 @@
+---
+- name: Apply opt-in high-memory server sysctls
+  ansible.posix.sysctl:
+    name: "{{ item.key }}"
+    value: "{{ item.value }}"
+    state: present
+    sysctl_set: true
+    reload: true
+  loop: "{{ linux_server_memory_sysctls | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}={{ item.value }}"
+  when: linux_server_memory_tuning_enabled | bool
+  become: true

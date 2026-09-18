@@ -1,0 +1,100 @@
+---
+- name: Create compose deployment root
+  ansible.builtin.file:
+    path: "{{ linux_server_data_root }}/services"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  become: true
+
+- name: Create the shared Docker service network
+  community.docker.docker_network:
+    name: "{{ linux_server_service_network_name }}"
+    state: present
+  when: linux_server_create_service_network | bool
+  become: true
+
+- name: Validate compose project declarations
+  ansible.builtin.assert:
+    that:
+      - item.name is match('^[a-z0-9][a-z0-9-]*$')
+      - item.source is defined
+      - item.compose_files | default([]) | length > 0
+      - item.compose_files | select('match', '^[A-Za-z0-9_.-]+\\.ya?ml$') | list | length == (item.compose_files | length)
+    fail_msg: >-
+      Every linux_server_compose_projects entry needs a lowercase name, a
+      local controller source directory, and at least one compose file.
+  loop: "{{ linux_server_compose_projects }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Check compose project source directories on the controller
+  ansible.builtin.stat:
+    path: "{{ item.source }}"
+  delegate_to: localhost
+  become: false
+  loop: "{{ linux_server_compose_projects }}"
+  loop_control:
+    label: "{{ item.name }}"
+  register: linux_server_compose_source_directories
+
+- name: Refuse missing compose project source directories
+  ansible.builtin.assert:
+    that:
+      - item.stat.exists
+      - item.stat.isdir
+    fail_msg: >-
+      Compose source {{ item.item.source }} for {{ item.item.name }} does not
+      exist on the controller or is not a directory.
+  loop: "{{ linux_server_compose_source_directories.results }}"
+  loop_control:
+    label: "{{ item.item.name }}"
+
+- name: Copy compose project files to the server
+  ansible.builtin.copy:
+    src: "{{ item.source }}/"
+    dest: "{{ linux_server_data_root }}/services/{{ item.name }}/"
+    owner: root
+    group: root
+    mode: preserve
+    directory_mode: "0750"
+  loop: "{{ linux_server_compose_projects }}"
+  loop_control:
+    label: "{{ item.name }}"
+  become: true
+
+- name: Bring compose projects up and enable restart-managed services
+  community.docker.docker_compose_v2:
+    project_src: "{{ linux_server_data_root }}/services/{{ item.name }}"
+    files: "{{ item.compose_files }}"
+    state: present
+  loop: "{{ linux_server_compose_projects }}"
+  loop_control:
+    label: "{{ item.name }}"
+  become: true
+
+- name: Install boot recovery unit for each Compose project
+  ansible.builtin.template:
+    src: compose-project.service.j2
+    dest: "/etc/systemd/system/homeserver-compose-{{ item.name }}.service"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ linux_server_compose_projects }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when: linux_server_compose_manage_boot | bool
+  become: true
+
+- name: Enable Compose boot recovery units
+  ansible.builtin.systemd_service:
+    name: "homeserver-compose-{{ item.name }}.service"
+    enabled: true
+    state: started
+    daemon_reload: true
+  loop: "{{ linux_server_compose_projects }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when: linux_server_compose_manage_boot | bool
+  become: true

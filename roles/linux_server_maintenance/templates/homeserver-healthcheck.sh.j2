@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+logger -t homeserver-healthcheck "checking Docker and {{ linux_server_storage_mounts | length }} managed mount(s)"
+
+if ! /usr/bin/docker info >/dev/null 2>&1; then
+  logger -p user.err -t homeserver-healthcheck "Docker is unavailable"
+  exit 1
+fi
+
+{% for mount in linux_server_storage_mounts %}
+if ! /usr/bin/findmnt --target {{ mount.path | quote }} >/dev/null 2>&1; then
+  logger -p user.err -t homeserver-healthcheck "required mount is absent: {{ mount.path }}"
+  exit 1
+fi
+{% endfor %}
+
+logger -t homeserver-healthcheck "healthy"

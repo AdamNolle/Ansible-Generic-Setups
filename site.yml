@@ -60,3 +60,30 @@
       when: ansible_facts.system != 'Linux'
   roles:
     - linux_apps       # Brave + apt apps + flatpaks (group_vars/linux.yml)
+
+- name: Provision a durable Linux server / homelab host
+  hosts: linux_server
+  gather_facts: true
+  pre_tasks:
+    - name: Stop when the host is not Linux
+      ansible.builtin.meta: end_host
+      when: ansible_facts.system != 'Linux'
+
+    - name: Verify that this server profile supports the host
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.os_family == 'Debian'
+          - ansible_facts.pkg_mgr == 'apt'
+        fail_msg: >-
+          The linux_server profile currently supports Debian/Ubuntu hosts that
+          use apt. Extend the package and repository tasks before using it on
+          another distribution.
+  roles:
+    - linux_server_base
+    - linux_server_memory
+    - linux_server_storage
+    - linux_server_docker
+    - linux_server_gpu
+    - linux_server_firewall
+    - linux_server_compose
+    - linux_server_maintenance

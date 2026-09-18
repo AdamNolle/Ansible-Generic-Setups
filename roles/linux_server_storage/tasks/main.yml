@@ -1,0 +1,49 @@
+---
+- name: Validate requested storage mounts
+  ansible.builtin.assert:
+    that:
+      - item.name is match('^[A-Za-z0-9][A-Za-z0-9_.-]*$')
+      - item.uuid is match('^[A-Za-z0-9-]+$')
+      - item.path is match('^/mnt/[A-Za-z0-9][A-Za-z0-9_.-]*$')
+      - item.fstype is match('^[A-Za-z0-9._+-]+$')
+    fail_msg: >-
+      Each linux_server_storage_mounts entry needs a safe name, an existing
+      filesystem UUID, an /mnt/<name> mount point, and a filesystem type. This
+      role intentionally refuses raw /dev paths and non-/mnt mount locations.
+  loop: "{{ linux_server_storage_mounts }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Create storage mount points
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop: "{{ linux_server_storage_mounts }}"
+  loop_control:
+    label: "{{ item.path }}"
+  become: true
+
+- name: Verify every requested filesystem UUID exists before changing fstab
+  ansible.builtin.command: "findfs UUID={{ item.uuid }}"
+  changed_when: false
+  loop: "{{ linux_server_storage_mounts }}"
+  loop_control:
+    label: "{{ item.name }} ({{ item.uuid }})"
+  become: true
+
+- name: Mount existing storage filesystems and persist them in fstab
+  ansible.posix.mount:
+    path: "{{ item.path }}"
+    src: "UUID={{ item.uuid }}"
+    fstype: "{{ item.fstype }}"
+    opts: "{{ item.options | default('defaults,nofail,x-systemd.device-timeout=10') }}"
+    dump: "{{ item.dump | default('0') }}"
+    passno: "{{ item.passno | default('2') }}"
+    state: mounted
+  loop: "{{ linux_server_storage_mounts }}"
+  loop_control:
+    label: "{{ item.name }} -> {{ item.path }}"
+  become: true

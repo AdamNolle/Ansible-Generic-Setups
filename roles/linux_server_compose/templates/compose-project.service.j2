@@ -1,0 +1,17 @@
+[Unit]
+Description=Boot recovery for {{ item.name }} Compose project
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory={{ linux_server_data_root }}/services/{{ item.name }}
+ExecStart=/usr/bin/docker compose {% for compose_file in item.compose_files %}--file {{ compose_file }} {% endfor %}up --detach
+ExecStop=/usr/bin/docker compose {% for compose_file in item.compose_files %}--file {{ compose_file }} {% endfor %}stop
+RemainAfterExit=yes
+TimeoutStartSec=180
+TimeoutStopSec=120
+
+[Install]
+WantedBy=multi-user.target
