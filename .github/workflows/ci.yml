@@ -1,0 +1,27 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+
+jobs:
+  syntax-check:
+    name: Ansible syntax check on Adlon
+    runs-on: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["self-hosted","Linux","X64","personal-ci"]') || 'ubuntu-latest' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Ansible and collections
+        shell: bash
+        run: |
+          python3 -m venv "$RUNNER_TEMP/ansible-venv"
+          "$RUNNER_TEMP/ansible-venv/bin/pip" install --upgrade pip ansible-core
+          "$RUNNER_TEMP/ansible-venv/bin/ansible-galaxy" collection install -r requirements.yml
+      - name: Check playbook syntax
+        shell: bash
+        run: "$RUNNER_TEMP/ansible-venv/bin/ansible-playbook --syntax-check -i 'inventory/hosts.yml' site.yml"
